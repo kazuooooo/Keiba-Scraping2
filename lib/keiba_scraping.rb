@@ -5,6 +5,8 @@ require 'webmock'
 require 'vcr'
 require 'pry'
 require 'csv'
+# TODO: 全年の取り込み => url の 2015部分を回せばOK
+
 
 VCR.configure do |config|
   config.cassette_library_dir = "vcr/vcr_cassettes"
@@ -16,6 +18,19 @@ module KeibaScraping
   class Race < Struct.new(:date, :place, :race_num); end
   # horce 着順、枠番、馬番、人気、オッズ
   class Horce < Struct.new(:ranking, :frame_num, :horce_num, :popularity, :odds); end
+  # CSVヘッダー記載
+  CSV.open("test.csv","a") do |csv|
+    csv << [
+      "日付", 
+      "場所", 
+      "R", 
+      "着順",
+      "枠番",
+      "馬番",
+      "人気順",
+      "オッズ",
+    ]
+  end
 
   (1..10).to_a.each do |place_num|
     VCR.use_cassette("keiba_scraping", :record => :new_episodes) do
@@ -54,10 +69,12 @@ module KeibaScraping
               # 場所
               place = title_text_array[1][2,2]
               # 第何Rか
-              race_num = html.css('#raceNo').text[0,1].to_i
+              race_num = html.css('#raceNo').text.gsub(/[^0-9]/,"").to_i
               race_obj = Race.new(date, place, race_num)
+              
               # horce情報を取得
               horces = html.css('#resultLs tr:not(:first-child)').css('tr:not(:last-child)')
+              @horce_objs = []
               horces.each do |horce|
                 #binding.pry
                 ranking = horce.at_css('td.txC:nth-of-type(1)').inner_text.gsub(/[\r\n]/,"").to_i
@@ -72,7 +89,11 @@ module KeibaScraping
                                       popularity,
                                       odds
                                       )
-                CSV.open("test.csv","a") do |csv|
+                @horce_objs << horce_obj
+              end
+
+              CSV.open("test.csv","a") do |csv|
+                @horce_objs.each do |horce_obj|
                   csv << [
                           race_obj.date, 
                           race_obj.place, 
@@ -83,7 +104,7 @@ module KeibaScraping
                           horce_obj.popularity,
                           horce_obj.odds,
                          ]
-                end
+                  end
               end
             end
         end
